@@ -1,2 +1,3 @@
 *.cache
 client.p12
+vendor/ruby
