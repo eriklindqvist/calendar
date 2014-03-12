@@ -1,3 +1,4 @@
 *.cache
 client.p12
 vendor/ruby
+Gemfile.lock
