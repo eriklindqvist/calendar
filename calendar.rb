@@ -6,12 +6,12 @@ require "bundler/setup"
 require 'google/api_client'
 require 'date'
 
-times = "10,00-18,30
-10,00-17,00
-8,30-19,15
+times = "9,00-18,30
+9,00-13,00
 LED
 11,00-19,15
-LED
+12,00-19,15
+10,00-16,15
 LED
 "
 
@@ -69,7 +69,7 @@ def getTimesArray(weekno, hours)
     hours.split(%r{\n}).map.with_index { |day, i|
         if !day.nil? && day != "LED" && !day.empty?
             times = day.split("-")
-            [getTime(weekno, i+1, times[0]), getTime(weekno, i+1, times[1])]
+            [getTime(weekno, i+1, times[0]), getT$ime(weekno, i+1, times[1])]
         end
     }.compact
 end
@@ -111,7 +111,7 @@ getTimesArray(weekno, times).each do |day|
     anna = Workday.new day[0], day[1]        
     
     if !((1..5) === anna.from.wday)        
-        createEvent(calendars[:anna], anna)
+        createEvent(@calendars[:anna], anna)
         break
     end
     
