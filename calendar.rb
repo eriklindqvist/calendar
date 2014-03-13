@@ -1,3 +1,5 @@
+#encoding: utf-8
+
 # Load the bundled environment
 require 'rubygems'
 require "bundler/setup"
@@ -51,15 +53,9 @@ else
   end
 end
 
-@calendars = {:anna => "pq5e7ok2c5njqok5opevqnd1qg@group.calendar.google.com",
+$calendars = {:anna => "pq5e7ok2c5njqok5opevqnd1qg@group.calendar.google.com",
              :agust => "4n598otsb91q7ulm2mic242v9k@group.calendar.google.com",
-             :erik => "q30c6nh1r41acel29qmefstss8@group.calendar.google.com"}
-
-#calendars = client.execute(:api_method => calendar.calendar_list.list,
-#                           :parameters => {:fields => 'items(id,summary)'})
-
-#calendars.data.items.each {|cal| puts "#{cal.id} : #{cal.summary}" }
-
+             :erik =>  "q30c6nh1r41acel29qmefstss8@group.calendar.google.com"}
 
 def getTime(week, day, time)
     DateTime.parse("W#{week}-#{day} #{time.gsub(',',':')}+1").to_time
@@ -69,90 +65,104 @@ def getTimesArray(weekno, hours)
     hours.split(%r{\n}).map.with_index { |day, i|
         if !day.nil? && day != "LED" && !day.empty?
             times = day.split("-")
-            [getTime(weekno, i+1, times[0]), getT$ime(weekno, i+1, times[1])]
+            [getTime(weekno, i+1, times[0]), getTime(weekno, i+1, times[1])]
+        else
+            nil
         end
-    }.compact
+    }
 end
 
 class Workday
-    attr_accessor :from, :to
+    attr_accessor :from, :to, :name, :calendar
     
-    def initialize(f=nil, t=nil)
-        @from, @to = f, t        
+    def initialize(options = {})
+        @from = options[:from]
+        @to = options[:to]
+        @name = options[:name]
+        @calendar = $calendars[options[:name].downcase.to_sym] unless options[:name].nil?
     end
     
     def to_s
-        "#{@from.strftime '%H:%M'} - #{@to.strftime '%H:%M'}"
+        "#{name}: #{from.strftime '%H:%M'} - #{to.strftime '%H:%M'}"
     end
 end
 
 class Daycare < Workday
     attr_accessor :leave, :pickup
     
+    def initialize
+        @name = "Agust"
+        @calendar = $calendars[:agust]
+    end
+
     def to_s
-        "#{leave} - #{pickup}"
+        "#{leave} lämnar, #{pickup} hämtar"
     end
 end
 
-def createEvent(cal, workday)    
+def createEvent(workday)
     event = {
         'summary' => workday,
         'start' => { 'dateTime' => workday.from.to_datetime },
         'end' => { 'dateTime' => workday.to.to_datetime },
         }
 
-    @client.execute(:api_method => @calendar.events.insert,
-        :parameters => {'calendarId' => cal},
+    result = @client.execute(:api_method => @calendar.events.insert,
+        :parameters => {'calendarId' => workday.calendar},
         :body => JSON.dump(event),
         :headers => {'Content-Type' => 'application/json'})    
 end
 
-getTimesArray(weekno, times).each do |day|
-    anna = Workday.new day[0], day[1]        
-    
-    if !((1..5) === anna.from.wday)        
-        createEvent(@calendars[:anna], anna)
-        break
-    end
-    
-    erik = Workday.new(
-        Time.new(anna.from.year, anna.from.month, anna.from.day, 7, 30),
-        Time.new(anna.from.year, anna.from.month, anna.from.day, 16, 0))
-    
-    agust = Daycare.new
-    
-    if anna.from > erik.from
-        agust.leave = "Anna"
-        agust.from = anna.from - 1800 # 30 min tidigare
-    else
-        agust.leave = "Erik"
-        agust.from = erik.from - 1800 # 30 min tidigare
-    end
-    
-    if anna.from.monday?
-        agust.to = Time.new(anna.from.year, anna.from.month, anna.from.day, 14, 0)
+def max(f1, f2, attr)
+    a = f1.send attr
+    b = f2.send attr
+    a > b ? f1 : f2
+end
 
-        if weekno.to_i.odd?
-            agust.pickup = "Eva & Alf"
-        else
-            agust.pickup = "Karin & Anders"
+getTimesArray(weekno, times).each_with_index do |day, i|
+    erik = Workday.new(:name => "Erik",
+        :from => getTime(weekno, i+1, "07:30"),
+        :to => getTime(weekno, i+1, "16:00"))
+    
+    if !day.nil?
+        anna = Workday.new :name => "Anna", :from => day[0], :to => day[1]
+
+        if !((1..5) === anna.from.wday)
+            createEvent(anna)
+            break
         end
-    else
-        if anna.to > erik.to
-            agust.pickup = "Erik"
-            erik.to = Time.new(anna.from.year, anna.from.month, anna.from.day, 15, 0)
-            agust.to = erik.to + 1800
-        else
-            agust.pickup = "Anna"
-            if anna.to > Time.new(anna.from.year, anna.from.month, anna.from.day, 13, 30)
-                agust.to = anna.to + 1800
+
+        agust = Daycare.new
+
+        max = max(anna, erik, "from")
+        agust.leave = max.name
+        agust.from = max.from - 1800
+
+        if anna.from.monday?
+            agust.to = getTime(weekno, i+1, "14:00")
+
+            if weekno.to_i.odd?
+                agust.pickup = "Eva & Alf"
             else
-                agust.to = Time.new(anna.from.year, anna.from.month, anna.from.day, 14, 0)
+                agust.pickup = "Karin & Anders"
+            end
+        else
+            if anna.to > erik.to
+                agust.pickup = erik.name
+                erik.to = getTime(weekno, i+1, "15:00")
+                agust.to = erik.to + 1800
+            else
+                agust.pickup = anna.name
+                if anna.to > getTime(weekno, i+1, "13:30")
+                    agust.to = anna.to + 1800
+                else
+                    agust.to = getTime(weekno, i+1, "14:00")
+                end
             end
         end
     end
 
-    createEvent(@calendars[:anna], anna)
-    createEvent(@calendars[:erik], erik)
-    createEvent(@calendars[:agust], agust)
+    createEvent(anna) unless anna.nil?
+    createEvent(erik) unless erik.nil?
+    createEvent(agust) unless agust.nil?
 end
