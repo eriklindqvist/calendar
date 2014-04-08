@@ -29,13 +29,22 @@ require 'date'
 #"
 
 # Vecka 14
-times = "14,00-19,45
-8,30-16,00
-LED
+#times = "14,00-19,45
+#8,30-16,00
+#LED
+#14,00-19,15
+#9,00-18,30
+#LED
+#LED
+#"
+
+# Vecka 15
+times = "13,00-18,30
 14,00-19,15
-9,00-18,30
+8,00-18,30
 LED
-LED
+13,00-19,15
+10,00-16,15
 "
 
 if ARGV.length == 0
@@ -79,7 +88,9 @@ $calendars = {:anna => "pq5e7ok2c5njqok5opevqnd1qg@group.calendar.google.com",
              :erik =>  "q30c6nh1r41acel29qmefstss8@group.calendar.google.com"}
 
 def getTime(week, day, time)
-    DateTime.parse("W#{week}-#{day} #{time.gsub(',',':')}+1").to_time
+    d = DateTime.parse("W#{week}-#{day} #{time.gsub(',',':')}+1")
+    d = d - (1 / 24.0) if d.to_time.dst?
+    d.to_time
 end
 
 def getTimesArray(weekno, hours)
@@ -104,7 +115,7 @@ class Workday
     end
     
     def to_s
-        "#{name}: #{from.strftime '%H:%M'} - #{to.strftime '%H:%M'}"
+        "#{name}"
     end
 end
 
@@ -127,11 +138,11 @@ def createEvent(workday)
         'start' => { 'dateTime' => workday.from.to_datetime },
         'end' => { 'dateTime' => workday.to.to_datetime },
         }
-
+    puts JSON.dump(event)
     result = @client.execute(:api_method => @calendar.events.insert,
         :parameters => {'calendarId' => workday.calendar},
         :body => JSON.dump(event),
-        :headers => {'Content-Type' => 'application/json'})    
+        :headers => {'Content-Type' => 'application/json'})
 end
 
 def max(f1, f2, attr)
